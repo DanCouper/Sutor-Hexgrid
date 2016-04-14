@@ -1,0 +1,147 @@
+/**
+ * Create a grid of hexagons. Needs a regular hexagon SVG to use as a BG image,
+ * otherwise this just creates a grid of elements with hexagon proportions.
+ *
+ * Structure should be:
+ *    .hex-container
+ *      .hex-item
+ *        .hex-hexagon // this set as a background
+ *        .hex-body
+ *      .hex-item
+ *        .hex-hexagon // this set as a background
+ *        .hex-body
+ *      .hex-item
+ *        .hex-hexagon // this set as a background
+ *        .hex-body
+ *
+ * The grid ican be responsive: by adjusting the $max-in-row/$min-in-row
+ * variables passed to the `hex-item()` mixin, can have the grid reflow.
+ * for example:
+ *
+ *     .my-hex-item {
+ *        @include hex-item($max-in-row: 2, $min-in-row: 1);
+ *        @media (min-width: 900px) {
+ *          @include hex-item($max-in-row: 3, $min-in-row: 2);
+ *        }
+ *     }
+ *
+ * ISSUES:
+ * - This expects hexagons with vertical sides; it would need to be rewitten
+ *   to take into account hexagons rotated 90deg.
+ * - There will be issues with text in the `hex-body()`; with this being
+ *   responsive, it needs to be very carefully tested to prevent overflows.
+ */
+
+/* The way hexagons tesselate means that more than likely,
+ * what is wanted is rows of n alterated with rows of n +/- 1. */
+$hex-max-in-row: 3 !default;
+$hex-min-in-row: $hex-max-in-row - 1 !default;
+$hex-padding: .5rem !default;
+
+/* Regular hexagon geometry. Given the total width of a hexagon
+ * with straight verticals (pointy ends top & bottom), figure out the height.
+ * This is needed to calculate the CSS box the hexagon fits into.
+ * It is also used to calculate offsets. */
+@function hex-y($x) { @return ((1 / sqrt(3)) * $x) * 2; }
+/* Half the height - is the height minus the pointy bits: */
+@function hex-half-y($x) { @return hex-y($x) / 2 }
+/* Quarter of the height: is the height of one of the pointy bits: */
+@function hex-quarter-y($x) { @return hex-y($x) / 4 }
+
+/* Float works better than flex in this instance, so clearfix applied
+ * to the outer container. */
+@mixin hex-container() {
+  width: 100%;
+  &::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+}
+
+@mixin hex-min-rows($max-in-row, $min-in-row) {
+  @for $i from 1 through $max-in-row {
+    &:nth-of-type(#{$max-in-row + $min-in-row}n + #{$i}) {
+      @content;
+    }
+  }
+}
+
+@mixin hex-max-rows($max-in-row, $min-in-row) {
+  @for $i from $max-in-row through ($max-in-row + $min-in-row) {
+    &:nth-of-type(#{$max-in-row + $min-in-row}n + #{$i}) {
+      @content
+    }
+  }
+}
+
+@mixin hex-first-in-min-rows($max-in-row, $min-in-row) {
+  &:nth-of-type(#{$max-in-row + $min-in-row}n + 1) {
+    @content;
+  }
+}
+
+@mixin hex-first-in-max-rows($max-in-row, $min-in-row) {
+  &:nth-of-type(#{$max-in-row + $min-in-row}n + #{$max-in-row}) {
+    @content;
+  }
+}
+
+@mixin hex-first-row($min-in-row: $hex-min-in-row) {
+  &:nth-of-type(-n + #{$min-in-row}) {
+    @content;
+  }
+}
+
+@mixin hex-item($max-in-row: $hex-max-in-row, $min-in-row: ($max-in-row - 1)) {
+  float: left;
+  width: 100% / $max-in-row;
+  // The hexagons are arrayed in rows. Every odd-numbered row has one less
+  // hexagon than every even-numbered row, allowing tesselation.
+  // The `$hex-columns` variable specifies the maximum that can fit in a row.
+  margin-top: 0 - hex-quarter-y(100% / $max-in-row);
+  // IMPORTANT: if the margins are not reset, then anything that depends on
+  // switching/reflowing layout using media queries will fail, as the previous
+  // margin values will be retained. The `nth-of-type` is used to ensure
+  // specificity matches that of the `hex-first-in-min-rows` property.
+  &:nth-of-type(n) { margin-left: 0; }
+
+  @include hex-first-row($min-in-row) {
+    margin-top: 0;
+  }
+  @include hex-first-in-min-rows($max-in-row, $min-in-row) {
+    margin-left: (100% / $max-in-row) / 2;
+  }
+}
+
+
+@mixin hex() {
+  /* Pad each hex element top and bottom to push it to the correct
+   * hexagon aspect ratio - 1:2(1÷√3).
+   * NOTE: because padding is based on width, percentages can be used to
+   * maintain aspet ratio. See *eg* http://www.fredparke.com/blog/css-padding-trick-responsive-intrinsic-ratios */
+  padding: hex-half-y(100%) 0;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+/* The [**regular**] hexagon is an inline SVG, allowing it to be styled using CSS. It is
+ * absolutely positioned with a negative z-index to mimic `background-image`.
+ * NOTE: CSS shapes would make the markup simpler, but support not there yet. */
+@mixin hex-hexagon() {
+  position: absolute;
+  top: hex-y($hex-padding);
+  right: $hex-padding;
+  bottom: hex-y($hex-padding);
+  left: $hex-padding;
+  z-index: -1;
+}
+
+@mixin hex-body() {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
+
